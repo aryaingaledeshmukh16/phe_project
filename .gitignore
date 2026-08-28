@@ -1,0 +1,28 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+
+# .NET build output and local configuration
+**/bin/
+**/obj/
+PHE.API/appsettings.json
+PHE.API/appsettings.*.json
+!PHE.API/appsettings.example.json
+
+# Local uploads
+PHE.API/Uploads/*
+!PHE.API/Uploads/.gitkeep
+
+# Next.js and Node.js
+**/node_modules/
+**/.next/
+**/out/
+
+# Environment and secret files
+**/.env
+**/.env.*
+!**/.env.example
+**/secrets.json

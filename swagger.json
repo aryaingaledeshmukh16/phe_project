@@ -1,0 +1,12 @@
+﻿
+
+openapi    : 3.0.4
+info       : @{title=PHE.API; version=v1}
+paths      : @{/api/Applicant=; /api/Applicant/Layout/{applicationNo}=; 
+             /api/Applicant/Acknowledgement/{applicationNo}=; 
+             /WeatherForecast=}
+components : @{schemas=}
+tags       : {@{name=Applicant}, @{name=WeatherForecast}}
+
+
+

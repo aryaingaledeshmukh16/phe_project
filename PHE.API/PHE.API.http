@@ -1,0 +1,6 @@
+@PHE.API_HostAddress = http://localhost:5014
+
+GET {{PHE.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
