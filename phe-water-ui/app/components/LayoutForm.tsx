@@ -2,72 +2,67 @@
 
 import { useState } from "react";
 
+type LayoutData = {
+  applicationType: string;
+  peth: string;
+  zone: string;
+  propertyNumber: string;
+  approvedLayoutNumber: string;
+  approvedLayoutDate: string;
+  layoutAddress: string;
+};
+
 type Props = {
-  next: () => void;
+  next: (data: LayoutData) => void;
   back: () => void;
   applicationNo: string;
+  layoutData: LayoutData;
+  onChange: (data: LayoutData) => void;
 };
 
 export default function LayoutForm({
   next,
   back,
   applicationNo,
+  layoutData,
+  onChange,
 }: Props) {
-  const [applicationType, setApplicationType] = useState("");
-  const [peth, setPeth] = useState("");
-  const [zone, setZone] = useState("");
-  const [propertyNumber, setPropertyNumber] = useState("");
-  const [approvedLayoutNumber, setApprovedLayoutNumber] = useState("");
-  const [approvedLayoutDate, setApprovedLayoutDate] = useState("");
-  const [layoutAddress, setLayoutAddress] = useState("");
-
   const [loading, setLoading] = useState(false);
 
-  // =========================================================
-  // VALIDATION
-  // =========================================================
-
   const validateLayout = () => {
-    if (!applicationNo || applicationNo.trim() === "") {
-      alert("Application Number मिळाला नाही.");
-      return false;
-    }
-
-    if (!applicationType || applicationType.trim() === "") {
+    if (!layoutData.applicationType || layoutData.applicationType.trim() === "") {
       alert("कृपया अर्जाचा प्रकार निवडा.");
       return false;
     }
 
-    if (!peth || peth.trim() === "") {
+    if (!layoutData.peth || layoutData.peth.trim() === "") {
       alert("कृपया पेठ निवडा.");
       return false;
     }
 
-    if (!zone || zone.trim() === "") {
+    if (!layoutData.zone || layoutData.zone.trim() === "") {
       alert("कृपया झोन निवडा.");
       return false;
     }
 
-    if (!propertyNumber.trim()) {
+    if (!layoutData.propertyNumber.trim()) {
       alert("कृपया मिळकत क्रमांक भरा.");
       return false;
     }
 
-    if (!approvedLayoutNumber.trim()) {
+    if (!layoutData.approvedLayoutNumber.trim()) {
       alert("कृपया मंजूर लेआउट क्रमांक भरा.");
       return false;
     }
 
-    if (!approvedLayoutDate) {
+    if (!layoutData.approvedLayoutDate) {
       alert("कृपया मंजूर लेआउट दिनांक निवडा.");
       return false;
     }
 
-    // Date validation
     const selectedDate = new Date(
-      `${approvedLayoutDate}T00:00:00`
+      `${layoutData.approvedLayoutDate}T00:00:00`
     );
-
     const today = new Date();
 
     today.setHours(0, 0, 0, 0);
@@ -77,17 +72,13 @@ export default function LayoutForm({
       return false;
     }
 
-    if (!layoutAddress.trim()) {
+    if (!layoutData.layoutAddress.trim()) {
       alert("कृपया जागेचा पत्ता भरा.");
       return false;
     }
 
     return true;
   };
-
-  // =========================================================
-  // SAVE LAYOUT
-  // =========================================================
 
   const handleNext = async () => {
     if (!validateLayout()) {
@@ -101,141 +92,14 @@ export default function LayoutForm({
     setLoading(true);
 
     try {
-      // IMPORTANT:
-      // Controller name = ApplicantsController
-      // Therefore route = /api/Applicants
-      const API_URL =
-        `http://localhost:5014/api/Applicants/Layout/${encodeURIComponent(
-          applicationNo.trim()
-        )}`;
-
-      console.log("---------------------------------------");
-      console.log("Calling Layout API:");
-      console.log(API_URL);
-      console.log("Application No:", applicationNo);
-      console.log("Application Type:", applicationType);
-      console.log("Peth:", peth);
-      console.log("Zone:", zone);
-      console.log("Property Number:", propertyNumber);
-      console.log("Approved Layout Number:", approvedLayoutNumber);
-      console.log("Approved Layout Date:", approvedLayoutDate);
-      console.log("Layout Address:", layoutAddress);
-      console.log("---------------------------------------");
-
-      const response = await fetch(API_URL, {
-        method: "PUT",
-
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-
-        body: JSON.stringify({
-          applicationType: applicationType.trim(),
-          peth: peth.trim(),
-          zone: zone.trim(),
-          propertyNumber: propertyNumber.trim(),
-          layoutAddress: layoutAddress.trim(),
-          approvedLayoutNumber:
-            approvedLayoutNumber.trim(),
-
-          // input type=date gives yyyy-MM-dd
-          approvedLayoutDate: approvedLayoutDate,
-        }),
-      });
-
-      // Read response only once
-      const responseText = await response.text();
-
-      console.log("Layout API Status:", response.status);
-      console.log("Layout API Response:", responseText);
-
-      // =====================================================
-      // API ERROR
-      // =====================================================
-
-      if (!response.ok) {
-        let errorMessage = responseText;
-
-        try {
-          const errorJson = JSON.parse(responseText);
-
-          errorMessage =
-            errorJson.message ||
-            errorJson.error ||
-            responseText;
-        } catch {
-          // Keep original response text
-        }
-
-        alert(
-          `Layout Information Save Failed.\n\n` +
-          `Status: ${response.status}\n\n` +
-          `${errorMessage}`
-        );
-
-        return;
-      }
-
-      // =====================================================
-      // SUCCESS RESPONSE
-      // =====================================================
-
-      let result: any = null;
-
-      try {
-        result = JSON.parse(responseText);
-      } catch {
-        console.warn(
-          "Layout API returned non-JSON response:",
-          responseText
-        );
-      }
-
-      console.log("Layout Save Result:", result);
-
-      alert(
-        "Layout Information Saved Successfully."
-      );
-
-      // Go to next form
-      next();
-    } catch (error) {
-      console.error(
-        "Layout Connection Error:",
-        error
-      );
-
-      if (error instanceof TypeError) {
-        alert(
-          "API Connection Failed.\n\n" +
-          "कृपया PHE.API चालू आहे का ते तपासा.\n\n" +
-          "Backend: http://localhost:5014"
-        );
-      } else {
-        alert(
-          "Layout Save करताना error आला.\n\n" +
-          (error instanceof Error
-            ? error.message
-            : String(error))
-        );
-      }
+      next(layoutData);
     } finally {
       setLoading(false);
     }
   };
 
-  // =========================================================
-  // UI
-  // =========================================================
-
   return (
     <div className="form-card">
-
-      {/* ================================
-          TITLE
-      ================================= */}
-
       <div className="form-title">
         <h2>
           लेआउट माहिती / Layout Information
@@ -244,35 +108,9 @@ export default function LayoutForm({
 
       <div className="title-border"></div>
 
-      {/* ================================
-          APPLICATION NUMBER
-      ================================= */}
-
-      <div
-        style={{
-          marginBottom: "20px",
-          padding: "12px 15px",
-          background: "#e6f9ff",
-          borderRadius: "8px",
-          border: "1px solid #bdeeff",
-        }}
-      >
-        <strong>
-          Application No:
-        </strong>{" "}
-        {applicationNo || "Not Available"}
-      </div>
-
-      {/* ================================
-          FORM GRID
-      ================================= */}
+      
 
       <div className="grid">
-
-        {/* =================================
-            APPLICATION TYPE
-        ================================= */}
-
         <div>
           <label>
             ना हरकत दाखला प्रकार{" "}
@@ -280,9 +118,12 @@ export default function LayoutForm({
           </label>
 
           <select
-            value={applicationType}
+            value={layoutData.applicationType}
             onChange={(e) =>
-              setApplicationType(e.target.value)
+              onChange({
+                ...layoutData,
+                applicationType: e.target.value,
+              })
             }
             disabled={loading}
           >
@@ -296,19 +137,18 @@ export default function LayoutForm({
           </select>
         </div>
 
-        {/* =================================
-            PETH
-        ================================= */}
-
         <div>
           <label>
             पेठ <span>*</span>
           </label>
 
           <select
-            value={peth}
+            value={layoutData.peth}
             onChange={(e) =>
-              setPeth(e.target.value)
+              onChange({
+                ...layoutData,
+                peth: e.target.value,
+              })
             }
             disabled={loading}
           >
@@ -552,9 +392,12 @@ export default function LayoutForm({
           </label>
 
           <select
-            value={zone}
+            value={layoutData.zone}
             onChange={(e) =>
-              setZone(e.target.value)
+              onChange({
+                ...layoutData,
+                zone: e.target.value,
+              })
             }
             disabled={loading}
           >
@@ -596,10 +439,6 @@ export default function LayoutForm({
           </select>
         </div>
 
-        {/* =================================
-            PROPERTY NUMBER
-        ================================= */}
-
         <div>
           <label>
             मिळकत क्रमांक <span>*</span>
@@ -608,17 +447,16 @@ export default function LayoutForm({
           <input
             type="text"
             placeholder="Property Number"
-            value={propertyNumber}
+            value={layoutData.propertyNumber}
             onChange={(e) =>
-              setPropertyNumber(e.target.value)
+              onChange({
+                ...layoutData,
+                propertyNumber: e.target.value,
+              })
             }
             disabled={loading}
           />
         </div>
-
-        {/* =================================
-            APPROVED LAYOUT NUMBER
-        ================================= */}
 
         <div>
           <label>
@@ -629,19 +467,16 @@ export default function LayoutForm({
           <input
             type="text"
             placeholder="Approved Layout Number"
-            value={approvedLayoutNumber}
+            value={layoutData.approvedLayoutNumber}
             onChange={(e) =>
-              setApprovedLayoutNumber(
-                e.target.value
-              )
+              onChange({
+                ...layoutData,
+                approvedLayoutNumber: e.target.value,
+              })
             }
             disabled={loading}
           />
         </div>
-
-        {/* =================================
-            APPROVED LAYOUT DATE
-        ================================= */}
 
         <div>
           <label>
@@ -651,11 +486,12 @@ export default function LayoutForm({
 
           <input
             type="date"
-            value={approvedLayoutDate}
+            value={layoutData.approvedLayoutDate}
             onChange={(e) =>
-              setApprovedLayoutDate(
-                e.target.value
-              )
+              onChange({
+                ...layoutData,
+                approvedLayoutDate: e.target.value,
+              })
             }
             max={
               new Date()
@@ -666,10 +502,6 @@ export default function LayoutForm({
           />
         </div>
 
-        {/* =================================
-            LAYOUT ADDRESS
-        ================================= */}
-
         <div className="full">
           <label>
             जागेचा पत्ता <span>*</span>
@@ -677,14 +509,16 @@ export default function LayoutForm({
 
           <textarea
             placeholder="Layout Address"
-            value={layoutAddress}
+            value={layoutData.layoutAddress}
             onChange={(e) =>
-              setLayoutAddress(e.target.value)
+              onChange({
+                ...layoutData,
+                layoutAddress: e.target.value,
+              })
             }
             disabled={loading}
           ></textarea>
         </div>
-
       </div>
 
       {/* =================================

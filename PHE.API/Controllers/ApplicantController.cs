@@ -544,6 +544,339 @@ namespace PHE.API.Controllers
                     remark
             };
         }
+
+        // =========================================================
+        // POST: api/Applicants/SiteVisit/{applicationNo}
+        // =========================================================
+        [HttpPost("SiteVisit/{applicationNo}")]
+        [RequestSizeLimit(50_000_000)]
+        public async Task<IActionResult> SaveSiteVisit(
+            string applicationNo,
+            [FromForm] SiteVisitDto siteVisit)
+        {
+            // -------------------------------------------------
+            // Validate Application Number
+            // -------------------------------------------------
+            if (string.IsNullOrWhiteSpace(applicationNo))
+            {
+                return BadRequest(new
+                {
+                    message = "Application Number is required."
+                });
+            }
+
+            // -------------------------------------------------
+            // Validate DTO
+            // -------------------------------------------------
+            if (siteVisit == null)
+            {
+                return BadRequest(new
+                {
+                    message = "Site Visit data is required."
+                });
+            }
+
+
+
+            // -------------------------------------------------
+            // Validate LayoutYesNo
+            // -------------------------------------------------
+            if (string.IsNullOrWhiteSpace(siteVisit.LayoutYesNo) ||
+                siteVisit.LayoutYesNo == "Select")
+            {
+                return BadRequest(new
+                {
+                    message = "Layout Pipeline Status must be selected."
+                });
+            }
+
+            // -------------------------------------------------
+            // Validate status
+            // -------------------------------------------------
+            if (string.IsNullOrWhiteSpace(siteVisit.Status) ||
+                siteVisit.Status == "Status")
+            {
+                return BadRequest(new
+                {
+                    message = "Site Status must be selected (Accept, Reject, or Hold)."
+                });
+            }
+
+            // -------------------------------------------------
+            // Validate GeoTagPhoto - always required
+            // -------------------------------------------------
+            if (siteVisit.SiteVisitGeoTagPhoto == null)
+            {
+                return BadRequest(new
+                {
+                    message = "Site Visit Geo Tag Photo is required."
+                });
+            }
+
+            // -------------------------------------------------
+            // Conditional validation for no pipeline case
+            // -------------------------------------------------
+            if (siteVisit.LayoutYesNo == "अस्तित्वात नाही")
+            {
+                if (siteVisit.TotalEstimateAmount == null ||
+                    siteVisit.TotalEstimateAmount <= 0)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Total Estimate Amount is required and must be greater than 0."
+                    });
+                }
+
+                if (siteVisit.TotalPlots == null ||
+                    siteVisit.TotalPlots <= 0)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Total Plots is required and must be greater than 0."
+                    });
+                }
+
+                if (siteVisit.PlotsApplicableForThisNoc == null ||
+                    siteVisit.PlotsApplicableForThisNoc <= 0)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Plots applicable for this NOC is required and must be greater than 0."
+                    });
+                }
+
+                if (siteVisit.PlotsApplicableForThisNoc >
+                    siteVisit.TotalPlots)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Plots applicable cannot exceed Total Plots."
+                    });
+                }
+
+                if (siteVisit.SiteVisitEstimateDocument == null)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Estimate Document is required when pipeline does not exist."
+                    });
+                }
+            }
+
+            try
+            {
+                // -------------------------------------------------
+                // Find Applicant
+                // -------------------------------------------------
+                var applicant = await _context.Applicants
+                    .FirstOrDefaultAsync(x =>
+                        x.ApplicationNo == applicationNo);
+
+                if (applicant == null)
+                {
+                    return NotFound(new
+                    {
+                        message = "Application not found.",
+                        applicationNo
+                    });
+                }
+
+
+
+                var uploadRoot = Path.Combine(
+                    Directory.GetCurrentDirectory(),
+                    "Uploads");
+
+                var savedPaths = new Dictionary<string, string>();
+
+                // -------------------------------------------------
+                // Upload Estimate Document (conditional)
+                // -------------------------------------------------
+                if (siteVisit.SiteVisitEstimateDocument != null)
+                {
+                    var estimateFolder = Path.Combine(
+                        uploadRoot,
+                        "SiteVisit");
+
+                    Directory.CreateDirectory(estimateFolder);
+
+                    var estimateFileName =
+                        $"{Guid.NewGuid()}_{Path.GetFileName(siteVisit.SiteVisitEstimateDocument.FileName)}";
+
+                    var estimateFullPath = Path.Combine(
+                        estimateFolder,
+                        estimateFileName);
+
+                    await using var estimateStream = new FileStream(
+                        estimateFullPath,
+                        FileMode.CreateNew);
+
+                    await siteVisit.SiteVisitEstimateDocument
+                        .CopyToAsync(estimateStream);
+
+                    savedPaths["SiteVisitEstimate"] =
+                        $"Uploads/SiteVisit/{estimateFileName}";
+                }
+
+                // -------------------------------------------------
+                // Upload Geo Tag Photo (always required)
+                // -------------------------------------------------
+                var geoTagFolder = Path.Combine(
+                    uploadRoot,
+                    "SiteVisit");
+
+                Directory.CreateDirectory(geoTagFolder);
+
+                var geoTagFileName =
+                    $"{Guid.NewGuid()}_{Path.GetFileName(siteVisit.SiteVisitGeoTagPhoto.FileName)}";
+
+                var geoTagFullPath = Path.Combine(
+                    geoTagFolder,
+                    geoTagFileName);
+
+                await using var geoTagStream = new FileStream(
+                    geoTagFullPath,
+                    FileMode.CreateNew);
+
+                await siteVisit.SiteVisitGeoTagPhoto
+                    .CopyToAsync(geoTagStream);
+
+                savedPaths["SiteVisitGeoTag"] =
+                    $"Uploads/SiteVisit/{geoTagFileName}";
+
+                // -------------------------------------------------
+                // Calculate AmountForPlots
+                // -------------------------------------------------
+                decimal? calculatedAmount = null;
+
+                if (siteVisit.LayoutYesNo == "अस्तित्वात नाही" &&
+                    siteVisit.TotalEstimateAmount.HasValue &&
+                    siteVisit.TotalPlots.HasValue &&
+                    siteVisit.PlotsApplicableForThisNoc.HasValue)
+                {
+                    double estimatePerPlot =
+                        (double)siteVisit.TotalEstimateAmount /
+                        siteVisit.TotalPlots.Value;
+
+                    double estimateForThisNoc =
+                        estimatePerPlot *
+                        siteVisit.PlotsApplicableForThisNoc.Value;
+
+                    double roundedAmount =
+                        Math.Round(estimateForThisNoc, 0);
+
+                    calculatedAmount =
+                        Convert.ToDecimal(roundedAmount);
+                }
+
+                // -------------------------------------------------
+                // Update Applicant
+                // -------------------------------------------------
+                applicant.LayoutYesNo = siteVisit.LayoutYesNo;
+                applicant.TotalPlots = siteVisit.TotalPlots;
+                applicant.PlotsApplicableForThisNoc =
+                    siteVisit.PlotsApplicableForThisNoc;
+                applicant.AmountForPlots = calculatedAmount;
+
+                if (savedPaths.ContainsKey("SiteVisitEstimate"))
+                {
+                    applicant.SiteVisitEstimateDocumentPath =
+                        savedPaths["SiteVisitEstimate"];
+                }
+
+                if (savedPaths.ContainsKey("SiteVisitGeoTag"))
+                {
+                    applicant.SiteVisitGeoTagPhotoPath =
+                        savedPaths["SiteVisitGeoTag"];
+                }
+
+                applicant.Remark = siteVisit.Remark;
+
+                // -------------------------------------------------
+                // Update Workflow Status
+                // -------------------------------------------------
+                applicant.scrutiny_status = siteVisit.Status == "Reject"
+                    ? "Rejected"
+                    : siteVisit.Status;
+
+                if (siteVisit.Status == "Accept")
+                {
+                    applicant.Application_status =
+                        "Development Charge Fixed";
+                }
+                else if (siteVisit.Status == "Reject")
+                {
+                    applicant.Application_status = "Rejected";
+                }
+
+                applicant.entry_date = DateTime.Now;
+
+                await _context.SaveChangesAsync();
+
+                // -------------------------------------------------
+                // Create History Log
+                // -------------------------------------------------
+                var log = CreateApplicantLogForSiteVisit(
+                    applicant,
+                    "Site Visit Updated");
+
+                _context.ApplicantsLogs.Add(log);
+                await _context.SaveChangesAsync();
+
+                // -------------------------------------------------
+                // Return Success Response
+                // -------------------------------------------------
+                return Ok(new
+                {
+                    message = "Site Visit saved successfully.",
+                    applicationNo,
+                    layoutYesNo = applicant.LayoutYesNo,
+                    totalPlots = applicant.TotalPlots,
+                    plotsApplicableForThisNoc =
+                        applicant.PlotsApplicableForThisNoc,
+                    amountForPlots = applicant.AmountForPlots,
+                    siteVisitEstimateDocumentPath =
+                        applicant.SiteVisitEstimateDocumentPath,
+                    siteVisitGeoTagPhotoPath =
+                        applicant.SiteVisitGeoTagPhotoPath,
+                    status = applicant.scrutiny_status,
+                    remark = applicant.Remark,
+                    applicationStatus =
+                        applicant.Application_status
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Site Visit save failed.",
+                    error = ex.Message,
+                    innerError = ex.InnerException?.Message
+                });
+            }
+        }
+
+        // =========================================================
+        // Helper: Create Applicant Log for Site Visit
+        // =========================================================
+        private ApplicantsLog CreateApplicantLogForSiteVisit(
+            Applicant applicant,
+            string remark)
+        {
+            var log = CreateApplicantLog(applicant, remark);
+
+            // Add Site Visit fields to the log
+            log.LayoutYesNo = applicant.LayoutYesNo;
+            log.TotalPlots = applicant.TotalPlots;
+            log.PlotsApplicableForThisNoc =
+                applicant.PlotsApplicableForThisNoc;
+            log.AmountForPlots = applicant.AmountForPlots;
+            log.SiteVisitEstimateDocumentPath =
+                applicant.SiteVisitEstimateDocumentPath;
+            log.SiteVisitGeoTagPhotoPath =
+                applicant.SiteVisitGeoTagPhotoPath;
+            return log;
+        }
     }
 
     

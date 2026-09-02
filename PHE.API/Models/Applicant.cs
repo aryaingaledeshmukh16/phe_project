@@ -12,10 +12,10 @@ namespace PHE.API.Models
 
         public string ApplicationNo { get; set; } = string.Empty;
 
-        [Required]
+        // This applicant workflow intentionally does not collect applicant info on the first form.
+        // FullName and MobileNumber are left blank for new applications created at document submission time.
         public string FullName { get; set; } = string.Empty;
 
-        [Required]
         public string MobileNumber { get; set; } = string.Empty;
 
         public string Email { get; set; } = string.Empty;
@@ -83,5 +83,19 @@ public string? Application_status { get; set; }
 public DateTime? entry_date { get; set; }
 
 public string? Remark { get; set; }
+
+// Site Visit Fields
+public string? LayoutYesNo { get; set; }
+
+public int? TotalPlots { get; set; }
+
+public int? PlotsApplicableForThisNoc { get; set; }
+
+[Column(TypeName = "decimal(18,2)")]
+public decimal? AmountForPlots { get; set; }
+
+public string? SiteVisitEstimateDocumentPath { get; set; }
+
+public string? SiteVisitGeoTagPhotoPath { get; set; }
     }
 }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PHE.API.Data;
 
@@ -11,9 +12,11 @@ using PHE.API.Data;
 namespace PHE.API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260829183213_AddSiteVisitFields")]
+    partial class AddSiteVisitFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -128,6 +131,12 @@ namespace PHE.API.Migrations
                     b.Property<decimal?>("ShowAmountAsPerNoOfPlots")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SiteRemark")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SiteStatus")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SiteVisitEstimateDocumentPath")
                         .HasColumnType("nvarchar(max)");
@@ -262,6 +271,12 @@ namespace PHE.API.Migrations
                     b.Property<decimal?>("ShowAmountAsPerNoOfPlots")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SiteRemark")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SiteStatus")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SiteVisitEstimateDocumentPath")
                         .HasColumnType("nvarchar(max)");

@@ -6,24 +6,16 @@ export default function Stepper({
   currentStep = 1,
 }: StepperProps) {
   const steps = [
-  "अर्जदार माहिती",
-  "लेआउट माहिती",
-  "कागदपत्रे",
-  "अर्जाची पोचपावती",
-];
+    "लेआउट माहिती",
+    "कागदपत्रे",
+    "अर्जाची पोचपावती",
+  ];
 
   return (
     <div className="stepper-card">
-
       <div className="stepper">
-
         {steps.map((step, index) => (
-
-          <div
-            className="step-item"
-            key={index}
-          >
-
+          <div className="step-item" key={index}>
             {index !== 0 && (
               <div
                 className={
@@ -57,13 +49,9 @@ export default function Stepper({
             >
               {step}
             </span>
-
           </div>
-
         ))}
-
       </div>
-
     </div>
   );
 }

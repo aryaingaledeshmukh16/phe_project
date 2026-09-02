@@ -2,14 +2,24 @@
 
 import { useState } from "react";
 
+type LayoutData = {
+  applicationType: string;
+  peth: string;
+  zone: string;
+  propertyNumber: string;
+  approvedLayoutNumber: string;
+  approvedLayoutDate: string;
+  layoutAddress: string;
+};
+
 type Props = {
-  applicationNo: string;
-  next: () => void;
+  layoutData: LayoutData;
+  next: (applicationNo: string) => void;
   back: () => void;
 };
 
 export default function DocumentsForm({
-  applicationNo,
+  layoutData,
   next,
   back,
 }: Props) {
@@ -21,15 +31,6 @@ export default function DocumentsForm({
   const [loading, setLoading] = useState(false);
 
   const handleUpload = async () => {
-    // --------------------------------
-    // Validation
-    // --------------------------------
-
-    if (!applicationNo || applicationNo.trim() === "") {
-      alert("Application Number मिळाला नाही.");
-      return;
-    }
-
     if (!taxNoc) {
       alert("कृपया Tax NOC निवडा.");
       return;
@@ -53,108 +54,152 @@ export default function DocumentsForm({
     try {
       setLoading(true);
 
-      console.log(
-        "Documents Upload Application No =",
-        applicationNo
+      const createPayload = {
+        fullName: "",
+        mobileNumber: "",
+        email: "",
+        aadhaarNumber: "",
+        address: "",
+        applicationType: layoutData.applicationType.trim(),
+        peth: layoutData.peth.trim(),
+        zone: layoutData.zone.trim(),
+        propertyNumber: layoutData.propertyNumber.trim(),
+        layoutAddress: layoutData.layoutAddress.trim(),
+        approvedLayoutNumber: layoutData.approvedLayoutNumber.trim(),
+        approvedLayoutDate: layoutData.approvedLayoutDate || null,
+      };
+
+      const createResponse = await fetch(
+        "http://localhost:5014/api/Applicants",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(createPayload),
+        }
       );
 
-      // --------------------------------
-      // FormData
-      // --------------------------------
+      const createText = await createResponse.text();
+
+      if (!createResponse.ok) {
+        let errorMessage = createText;
+
+        try {
+          const errorJson = JSON.parse(createText);
+          errorMessage =
+            errorJson.message ||
+            errorJson.error ||
+            createText;
+        } catch {
+          // ignore parse error
+        }
+
+        alert(
+          `Application Save Failed.\n\nStatus: ${createResponse.status}\n${errorMessage}`
+        );
+        return;
+      }
+
+      let createResult: any = null;
+
+      if (createText) {
+        try {
+          createResult = JSON.parse(createText);
+        } catch {
+          console.warn("Create applicant response was not JSON.");
+        }
+      }
+
+      const applicantNo = createResult?.applicationNo;
+
+      if (!applicantNo) {
+        alert(
+          "Application Number was not returned by the server after save."
+        );
+        return;
+      }
+
+      const layoutResponse = await fetch(
+        `http://localhost:5014/api/Applicants/Layout/${encodeURIComponent(applicantNo)}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            applicationType: layoutData.applicationType.trim(),
+            peth: layoutData.peth.trim(),
+            zone: layoutData.zone.trim(),
+            propertyNumber: layoutData.propertyNumber.trim(),
+            layoutAddress: layoutData.layoutAddress.trim(),
+            approvedLayoutNumber: layoutData.approvedLayoutNumber.trim(),
+            approvedLayoutDate: layoutData.approvedLayoutDate,
+          }),
+        }
+      );
+
+      const layoutText = await layoutResponse.text();
+
+      if (!layoutResponse.ok) {
+        let errorMessage = layoutText;
+
+        try {
+          const errorJson = JSON.parse(layoutText);
+          errorMessage =
+            errorJson.message ||
+            errorJson.error ||
+            layoutText;
+        } catch {
+          // ignore parse error
+        }
+
+        alert(
+          `Layout Information Save Failed.\n\nStatus: ${layoutResponse.status}\n${errorMessage}`
+        );
+        return;
+      }
 
       const formData = new FormData();
-
       formData.append("taxNoc", taxNoc);
       formData.append("satBara", satBara);
       formData.append("layoutMap", layoutMap);
       formData.append("geoTag", geoTag);
 
-      // IMPORTANT:
-      // Controller class = ApplicantsController
-      // Therefore route = api/Applicants
-      const API_URL =
-        `http://localhost:5014/api/Applicants/Documents/${encodeURIComponent(
-          applicationNo
-        )}`;
-
-      console.log("Documents API URL =", API_URL);
-
-      // --------------------------------
-      // API Call
-      // --------------------------------
-
-      const response = await fetch(API_URL, {
-        method: "POST",
-        body: formData,
-      });
-
-      console.log(
-        "Documents API Status =",
-        response.status
+      const documentsResponse = await fetch(
+        `http://localhost:5014/api/Applicants/Documents/${encodeURIComponent(applicantNo)}`,
+        {
+          method: "POST",
+          body: formData,
+        }
       );
 
-      const responseText = await response.text();
+      const documentsText = await documentsResponse.text();
 
-      console.log(
-        "Documents API Response =",
-        responseText
-      );
-
-      // --------------------------------
-      // Error
-      // --------------------------------
-
-      if (!response.ok) {
-        let errorMessage = responseText;
+      if (!documentsResponse.ok) {
+        let errorMessage = documentsText;
 
         try {
-          const errorJson = JSON.parse(responseText);
-
+          const errorJson = JSON.parse(documentsText);
           errorMessage =
             errorJson.message ||
             errorJson.error ||
-            responseText;
+            documentsText;
         } catch {
-          // Response JSON नसल्यास original text वापरू
+          // ignore parse error
         }
 
         alert(
-          `Documents Upload Failed.\n\nStatus: ${response.status}\n${errorMessage}`
+          `Documents Upload Failed.\n\nStatus: ${documentsResponse.status}\n${errorMessage}`
         );
-
         return;
       }
 
-      // --------------------------------
-      // Success Response
-      // --------------------------------
-
-      let result: any = null;
-
-      if (responseText) {
-        try {
-          result = JSON.parse(responseText);
-        } catch {
-          console.warn(
-            "Documents API returned non-JSON response."
-          );
-        }
-      }
-
-      console.log(
-        "Documents Upload Result =",
-        result
-      );
-
       alert("Documents Uploaded Successfully.");
-
-      // Next page
-      next();
+      next(applicantNo);
     } catch (error) {
-      console.error(
-        "Documents Upload Connection Error =",
-        error
-      );
+      console.error("Documents Upload Connection Error =", error);
 
       if (error instanceof TypeError) {
         alert(
@@ -163,9 +208,7 @@ export default function DocumentsForm({
           "API URL: http://localhost:5014"
         );
       } else {
-        alert(
-          "Documents Upload करताना error आला."
-        );
+        alert("Documents Upload करताना error आला.");
       }
     } finally {
       setLoading(false);
@@ -174,11 +217,6 @@ export default function DocumentsForm({
 
   return (
     <div className="form-card">
-
-      {/* -------------------------------- */}
-      {/* Title */}
-      {/* -------------------------------- */}
-
       <div className="form-title">
         <h2>
           कागदपत्रे / Documents Upload
@@ -186,10 +224,6 @@ export default function DocumentsForm({
       </div>
 
       <div className="title-border"></div>
-
-      {/* -------------------------------- */}
-      {/* Documents */}
-      {/* -------------------------------- */}
 
       <div className="grid">
 

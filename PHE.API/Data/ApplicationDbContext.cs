@@ -56,6 +56,10 @@ namespace PHE.API.Data
                 .Property(x => x.ShowAmountAsPerNoOfPlots)
                 .HasPrecision(18, 2);
 
+            modelBuilder.Entity<Applicant>()
+                .Property(x => x.AmountForPlots)
+                .HasPrecision(18, 2);
+
 
             // =====================================================
             // APPLICANTS LOG
@@ -81,6 +85,10 @@ namespace PHE.API.Data
 
             modelBuilder.Entity<ApplicantsLog>()
                 .Property(x => x.ShowAmountAsPerNoOfPlots)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<ApplicantsLog>()
+                .Property(x => x.AmountForPlots)
                 .HasPrecision(18, 2);
         }
     }

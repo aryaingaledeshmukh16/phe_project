@@ -4,62 +4,69 @@ import { useState } from "react";
 
 import Header from "./components/Header";
 import Stepper from "./components/Stepper";
-import ApplicantForm from "./components/ApplicantForm";
 import LayoutForm from "./components/LayoutForm";
 import DocumentsForm from "./components/DocumentsForm";
-
 import Acknowledgement from "./components/Acknowledgement";
+
+type LayoutData = {
+  applicationType: string;
+  peth: string;
+  zone: string;
+  propertyNumber: string;
+  approvedLayoutNumber: string;
+  approvedLayoutDate: string;
+  layoutAddress: string;
+};
 
 export default function Home() {
   const [step, setStep] = useState(1);
-
   const [applicationNo, setApplicationNo] = useState("");
-
-  
-  console.log("PAGE applicationNo =", applicationNo);
+  const [layoutData, setLayoutData] = useState<LayoutData>({
+    applicationType: "",
+    peth: "",
+    zone: "",
+    propertyNumber: "",
+    approvedLayoutNumber: "",
+    approvedLayoutDate: "",
+    layoutAddress: "",
+  });
 
   return (
-  <div className="page-wrapper">
+    <div className="page-wrapper">
+      <Header />
 
-    <Header />
+      <Stepper currentStep={step} />
 
-    <Stepper currentStep={step} />
+      {step === 1 && (
+        <LayoutForm
+          applicationNo={applicationNo}
+          layoutData={layoutData}
+          onChange={setLayoutData}
+          back={() => setStep(1)}
+          next={(data) => {
+            setLayoutData(data);
+            setStep(2);
+          }}
+        />
+      )}
 
-    {/* STEP 1 */}
-    {step === 1 && (
-      <ApplicantForm
-        next={(applicationNo: string) => {
-          console.log("Application No from Step 1:", applicationNo);
+      {step === 2 && (
+        <DocumentsForm
+          layoutData={layoutData}
+          next={(newApplicationNo: string) => {
+            setApplicationNo(newApplicationNo);
+            setStep(3);
+          }}
+          back={() => setStep(1)}
+        />
+      )}
 
-          setApplicationNo(applicationNo);
-          setStep(2);
-        }}
-      />
-    )}
-
-    {/* STEP 2 */}
-    {step === 2 && (
-      <LayoutForm
-        applicationNo={applicationNo}
-        back={() => setStep(1)}
-        next={() => setStep(3)}
-      />
-    )}
-
-    {/* STEP 3 */}
-   {step === 3 && (
-  <DocumentsForm
-    applicationNo={applicationNo}
-    next={() => {
-      window.location.href =
-        `/acknowledgement?applicationNo=${applicationNo}`;
-    }}
-    back={() => setStep(2)}
-  />
-)}
-
-   
-
-  </div>
-);
+      {step === 3 && (
+        <Acknowledgement
+          applicationNo={applicationNo}
+          back={() => setStep(2)}
+        />
+      )}
+    </div>
+  );
 }

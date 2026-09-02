@@ -74,5 +74,18 @@ namespace PHE.API.Models
         public DateTime? entry_date { get; set; }
 
         public string? Remark { get; set; }
+
+        // Site Visit Fields
+        public string? LayoutYesNo { get; set; }
+
+        public int? TotalPlots { get; set; }
+
+        public int? PlotsApplicableForThisNoc { get; set; }
+
+        public decimal? AmountForPlots { get; set; }
+
+        public string? SiteVisitEstimateDocumentPath { get; set; }
+
+        public string? SiteVisitGeoTagPhotoPath { get; set; }
     }
 }

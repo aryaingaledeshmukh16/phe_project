@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import SiteVisitForm from "../components/SiteVisitForm";
 
 type Applicant = {
   id: number;
@@ -70,6 +71,7 @@ type Panel =
   | "details"
   | "documents"
   | "history"
+  | "siteVisit"
   | null;
 
 const API_URL = "http://localhost:5014/api/JEScrutiny";
@@ -286,6 +288,11 @@ export default function JEScrutinyPage() {
     setActivePanel("documents");
   }
 
+  function openSiteVisit(app: Applicant) {
+    setSelectedApplication(app);
+    setActivePanel("siteVisit");
+  }
+
   // ============================================================
   // OPEN HISTORY
   // ============================================================
@@ -351,6 +358,45 @@ export default function JEScrutinyPage() {
     setHistory([]);
     setHistoryError("");
     setRemark("");
+  }
+
+  function getNocDownloadMessage(
+    applicationStatus: string | null,
+    applicationNo?: string
+  ) {
+    const normalizedStatus =
+      (applicationStatus || "").trim();
+
+    if (
+      normalizedStatus ===
+      "Application Approved by PHE"
+    ) {
+      return `Normal Water NOC download is ready for Application No: ${applicationNo || "N/A"}.`;
+    }
+
+    if (
+      normalizedStatus ===
+      "Payment Successful from Citizen"
+    ) {
+      return `Paid Water NOC download is ready for Application No: ${applicationNo || "N/A"}.`;
+    }
+
+    if (
+      normalizedStatus === "Rejected"
+    ) {
+      return "आपल्या अर्ज नामंजूर केलेला आहे";
+    }
+
+    return "आपला अर्ज मंजुरीच्या प्रक्रियेमधे आहे कृपया Application status वर क्लिक करुन अर्जाची स्थिती पहा";
+  }
+
+  function handleDownloadNoc(app: Applicant) {
+    const message = getNocDownloadMessage(
+      app.application_status || app.status,
+      app.applicationNo
+    );
+
+    alert(message);
   }
 
   // ============================================================
@@ -815,6 +861,18 @@ export default function JEScrutinyPage() {
                             {/* ACTION BUTTONS */}
                             <td className="je-action-cell">
 
+                              {activeTab === "siteVisit" ? (
+                                <button
+                                  type="button"
+                                  className="je-action-btn details"
+                                  onClick={() =>
+                                    openSiteVisit(app)
+                                  }
+                                >
+                                  Site Visit
+                                </button>
+                              ) : (
+                                <>
                               <button
                                 type="button"
                                 className="je-action-btn details"
@@ -844,6 +902,20 @@ export default function JEScrutinyPage() {
                               >
                                 History
                               </button>
+
+                              {activeTab === "status" && (
+                                <button
+                                  type="button"
+                                  className="je-action-btn download-noc"
+                                  onClick={() =>
+                                    handleDownloadNoc(app)
+                                  }
+                                >
+                                  Download NOC
+                                </button>
+                              )}
+                                </>
+                              )}
 
                             </td>
 
@@ -968,6 +1040,21 @@ export default function JEScrutinyPage() {
              ==================================================== */
 
           <section className="details-card">
+
+            {/* SITE VISIT PANEL */}
+            {activePanel === "siteVisit" &&
+              selectedApplication && (
+                <SiteVisitForm
+                  applicationNo={
+                    selectedApplication.applicationNo
+                  }
+                  next={() => {
+                    closePanel();
+                    fetchApplications();
+                  }}
+                  back={closePanel}
+                />
+              )}
 
             {/* DETAILS PANEL */}
             {activePanel === "details" &&
