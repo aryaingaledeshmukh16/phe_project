@@ -39,6 +39,7 @@ namespace PHE.API.Controllers
             }
         }
 
+
         [HttpGet("{applicationNo}")]
         public async Task<IActionResult> GetApplication(string applicationNo)
         {
@@ -65,6 +66,8 @@ namespace PHE.API.Controllers
                     });
                 }
 
+
+
                 return Ok(application);
             }
             catch (Exception ex)
@@ -75,7 +78,9 @@ namespace PHE.API.Controllers
                     error = ex.Message
                 });
             }
+
         }
+
 
         [HttpGet("{applicationNo}/history")]
         public async Task<IActionResult> GetHistory(string applicationNo)
