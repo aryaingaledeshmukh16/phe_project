@@ -68,6 +68,8 @@ export default function AcknowledgementPage() {
     );
   };
 
+
+  
   /* =========================
      LOADING
   ========================= */
@@ -89,3 +91,5 @@ export default function AcknowledgementPage() {
     <Acknowledgement applicationNo={applicationNo} back={() => { window.location.href = "/"; }} />
   );
 }
+
+
