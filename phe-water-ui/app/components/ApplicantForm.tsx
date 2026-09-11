@@ -55,7 +55,7 @@ export default function ApplicantForm({ next }: Props) {
     }
 
     try {
-      const API_URL = "http://localhost:5014/api/Applicants";
+      const API_URL = `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}/api/Applicants`;
 
       console.log("Calling Applicant API:", API_URL);
 
@@ -134,7 +134,7 @@ export default function ApplicantForm({ next }: Props) {
       alert(
         "API Connection Failed.\n\n" +
           "Please check whether PHE.API is running on:\n" +
-          "http://localhost:5014\n\n" +
+          `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}\n\n` +
           "Error: " +
           (error instanceof Error
             ? error.message

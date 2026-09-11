@@ -82,7 +82,7 @@ export default function SiteVisitForm({
         );
 
         const API_URL =
-          `http://localhost:5014/api/Applicants/${encodeURIComponent(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}/api/Applicants/${encodeURIComponent(
             applicationNo
           )}`;
 
@@ -295,7 +295,7 @@ export default function SiteVisitForm({
       formData.append("remark", siteRemark);
 
       const API_URL =
-        `http://localhost:5014/api/Applicants/SiteVisit/${encodeURIComponent(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}/api/Applicants/SiteVisit/${encodeURIComponent(
           applicationNo
         )}`;
 
@@ -370,7 +370,7 @@ export default function SiteVisitForm({
         alert(
           "Server Connection Error.\n\n" +
           "PHE.API चालू आहे का ते check करा.\n" +
-          "API URL: http://localhost:5014"
+          `API URL: ${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}`
         );
       } else {
         alert("Site Visit save करताना error आला.");

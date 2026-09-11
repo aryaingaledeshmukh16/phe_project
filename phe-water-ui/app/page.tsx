@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 
-import Header from "./components/Header";
 import Stepper from "./components/Stepper";
 import LayoutForm from "./components/LayoutForm";
 import DocumentsForm from "./components/DocumentsForm";
 import Acknowledgement from "./components/Acknowledgement";
+
 
 type LayoutData = {
   applicationType: string;
@@ -17,6 +17,8 @@ type LayoutData = {
   approvedLayoutDate: string;
   layoutAddress: string;
 };
+
+
 
 export default function Home() {
   const [step, setStep] = useState(1);
@@ -33,8 +35,6 @@ export default function Home() {
 
   return (
     <div className="page-wrapper">
-      <Header />
-
       <Stepper currentStep={step} />
 
       {step === 1 && (
@@ -70,3 +70,6 @@ export default function Home() {
     </div>
   );
 }
+
+
+

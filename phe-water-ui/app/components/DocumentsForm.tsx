@@ -70,7 +70,7 @@ export default function DocumentsForm({
       };
 
       const createResponse = await fetch(
-        "http://localhost:5014/api/Applicants",
+        `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}/api/Applicants`,
         {
           method: "POST",
           headers: {
@@ -121,7 +121,7 @@ export default function DocumentsForm({
       }
 
       const layoutResponse = await fetch(
-        `http://localhost:5014/api/Applicants/Layout/${encodeURIComponent(applicantNo)}`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}/api/Applicants/Layout/${encodeURIComponent(applicantNo)}`,
         {
           method: "PUT",
           headers: {
@@ -168,7 +168,7 @@ export default function DocumentsForm({
       formData.append("geoTag", geoTag);
 
       const documentsResponse = await fetch(
-        `http://localhost:5014/api/Applicants/Documents/${encodeURIComponent(applicantNo)}`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}/api/Applicants/Documents/${encodeURIComponent(applicantNo)}`,
         {
           method: "POST",
           body: formData,
@@ -205,7 +205,7 @@ export default function DocumentsForm({
         alert(
           "Server Connection Error.\n\n" +
           "PHE.API चालू आहे का ते check करा.\n" +
-          "API URL: http://localhost:5014"
+          `API URL: ${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}`
         );
       } else {
         alert("Documents Upload करताना error आला.");

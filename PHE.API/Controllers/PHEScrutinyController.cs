@@ -108,6 +108,7 @@ namespace PHE.API.Controllers
                         userName = x.user_name,
                         scrutinyStatus = x.scrutiny_status,
                         applicationStatus = x.Application_status,
+                        layoutYesNo = x.LayoutYesNo,
                         remark = x.Remark,
                         entryDate = x.entry_date
                     })
@@ -115,6 +116,10 @@ namespace PHE.API.Controllers
 
                 return Ok(history);
             }
+
+ 
+
+
             catch (Exception ex)
             {
                 return StatusCode(500, new
@@ -124,6 +129,9 @@ namespace PHE.API.Controllers
                 });
             }
         }
+
+
+        
 
         [HttpPut("{applicationNo}/action")]
         public async Task<IActionResult> SaveAction(string applicationNo, [FromBody] PHEScrutinyActionRequest request)
@@ -149,6 +157,14 @@ namespace PHE.API.Controllers
                 return BadRequest(new
                 {
                     message = "Scrutiny action is required."
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.LayoutYesNo) || request.LayoutYesNo == "Select")
+            {
+                return BadRequest(new
+                {
+                    message = "Please select whether the pipeline exists under approved layout."
                 });
             }
 
@@ -182,13 +198,26 @@ namespace PHE.API.Controllers
             }
 
             var action = request.Action.Trim();
+            var layoutYesNo = request.LayoutYesNo.Trim();
             string newScrutinyStatus;
             string newApplicationStatus;
 
             if (action.Equals("Accepted", StringComparison.OrdinalIgnoreCase))
             {
                 newScrutinyStatus = "Accepted";
-                newApplicationStatus = "Due for Payment from Citizen";
+
+                if (layoutYesNo == "अस्तित्वात आहे")
+                {
+                    newApplicationStatus = "Application Approved by PHE";
+                }
+                else if (layoutYesNo == "अस्तित्वात नाही")
+                {
+                    newApplicationStatus = "Due for Payment from Citizen";
+                }
+                else
+                {
+                    newApplicationStatus = "Application Approved by PHE";
+                }
             }
             else if (action.Equals("Rejected", StringComparison.OrdinalIgnoreCase))
             {
@@ -214,6 +243,7 @@ namespace PHE.API.Controllers
             application.user_code = request.UserCode;
             application.user_name = request.UserName;
             application.scrutiny_status = newScrutinyStatus;
+            application.LayoutYesNo = layoutYesNo;
             application.Application_status = newApplicationStatus;
             application.Status = newApplicationStatus;
             application.entry_date = entryDate;
@@ -257,6 +287,7 @@ namespace PHE.API.Controllers
                     user_name = application.user_name,
                     scrutiny_status = application.scrutiny_status,
                     Application_status = application.Application_status,
+                    LayoutYesNo = application.LayoutYesNo,
                     entry_date = application.entry_date,
                     Remark = application.Remark
                 };
@@ -294,6 +325,7 @@ namespace PHE.API.Controllers
     public class PHEScrutinyActionRequest
     {
         public string Action { get; set; } = string.Empty;
+        public string? LayoutYesNo { get; set; }
         public string? Remark { get; set; }
         public string? Role { get; set; }
         public string? UserCode { get; set; }

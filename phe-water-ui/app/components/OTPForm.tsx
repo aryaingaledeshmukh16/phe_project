@@ -33,7 +33,7 @@ export default function OTPForm({
       setLoading(true);
 
       const response = await fetch(
-        `http://localhost:5014/api/Applicant/SendOtp/${applicationNo}`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}/api/Applicant/SendOtp/${applicationNo}`,
         {
           method: "POST",
           headers: {
@@ -96,7 +96,7 @@ export default function OTPForm({
       setLoading(true);
 
       const response = await fetch(
-        `http://localhost:5014/api/Applicant/VerifyOtp/${applicationNo}`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}/api/Applicant/VerifyOtp/${applicationNo}`,
         {
           method: "POST",
           headers: {

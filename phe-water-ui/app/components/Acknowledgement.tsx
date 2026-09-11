@@ -45,7 +45,7 @@ export default function Acknowledgement({
     const fetchAcknowledgement = async () => {
       try {
         const response = await fetch(
-          `http://localhost:5014/api/Applicants/${encodeURIComponent(applicationNo)}`
+          `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}/api/Applicants/${encodeURIComponent(applicationNo)}`
         );
 
         if (!response.ok) {
@@ -137,6 +137,8 @@ export default function Acknowledgement({
     </div>
   </div>
 </header>
+
+
 
         <div className="smc-title-block">
           <h1>पिण्याच्या पाण्याच्या पाईपलाईन ना-हरकत प्रमाणपत्र अर्ज</h1>

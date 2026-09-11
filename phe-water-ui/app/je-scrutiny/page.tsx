@@ -74,7 +74,7 @@ type Panel =
   | "siteVisit"
   | null;
 
-const API_URL = "http://localhost:5014/api/JEScrutiny";
+const API_URL = `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014"}/api/JEScrutiny`;
 
 const CURRENT_ROLE = "Junior Engineer";
 const CURRENT_USER_CODE = "001";
@@ -390,14 +390,17 @@ export default function JEScrutinyPage() {
     return "आपला अर्ज मंजुरीच्या प्रक्रियेमधे आहे कृपया Application status वर क्लिक करुन अर्जाची स्थिती पहा";
   }
 
-  function handleDownloadNoc(app: Applicant) {
-    const message = getNocDownloadMessage(
-      app.application_status || app.status,
-      app.applicationNo
-    );
+  const handleDownloadNoc = (app: Applicant) => {
+    const currentStatus = (app.application_status ?? app.status ?? "").trim();
 
-    alert(message);
-  }
+    if (currentStatus.toLowerCase() !== "application approved by phe") {
+      alert("NOC is available only after Application Approved by PHE.");
+      return;
+    }
+
+    const nocUrl = `${API_URL}/${encodeURIComponent(app.applicationNo)}/noc`;
+    window.open(nocUrl, "_blank");
+  };
 
   // ============================================================
   // NEXT STATUS
@@ -1766,6 +1769,10 @@ export default function JEScrutinyPage() {
 
         .je-action-btn.history {
           background: #6b286f;
+        }
+
+        .je-action-btn.download-noc {
+          background: #2e7d32;
         }
 
         .je-center {

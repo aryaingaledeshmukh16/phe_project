@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi;
 using PHE.API.Data;
 
@@ -134,6 +135,21 @@ if (app.Environment.IsDevelopment())
 //
 
 app.UseStaticFiles();
+
+var frontendPublicRoot = Path.Combine(
+    Directory.GetCurrentDirectory(),
+    "..",
+    "phe-water-ui",
+    "public");
+
+if (Directory.Exists(frontendPublicRoot))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(frontendPublicRoot),
+        RequestPath = ""
+    });
+}
 
 
 // =========================================================

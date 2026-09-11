@@ -55,8 +55,10 @@ type HistoryItem = {
 type Tab = "document" | "status";
 type Panel = "details" | "documents" | "history" | null;
 
-const API_URL = "http://localhost:5014/api/DeScrutiny";
-const DOCUMENT_API_URL = "http://localhost:5014/api/JEScrutiny";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014";
+const API_URL = `${API_BASE_URL}/api/DeScrutiny`;
+const STATUS_API_URL = `${API_BASE_URL}/api/JEScrutiny`;
+const DOCUMENT_API_URL = `${API_BASE_URL}/api/JEScrutiny`;
 
 const CURRENT_ROLE = "Deputy Engineer";
 const CURRENT_USER_CODE = "002";
@@ -102,14 +104,15 @@ export default function DeScrutinyPage() {
 
   useEffect(() => {
     fetchApplications();
-  }, []);
+  }, [activeTab]);
 
   async function fetchApplications() {
     try {
       setLoading(true);
       setError("");
 
-      const response = await fetch(API_URL, { cache: "no-store" });
+      const endpoint = activeTab === "status" ? STATUS_API_URL : API_URL;
+      const response = await fetch(endpoint, { cache: "no-store" });
       const text = await response.text();
 
       if (!response.ok) {
@@ -169,7 +172,7 @@ export default function DeScrutinyPage() {
       });
     }
 
-    return applications.filter((app) => (app.application_status || app.status || "").trim().toLowerCase() === "development charge fixed");
+    return applications;
   }, [applications, activeTab]);
 
   function openDetails(app: Applicant) {
@@ -227,6 +230,18 @@ export default function DeScrutinyPage() {
     setHistoryError("");
     setRemark("");
   }
+
+  const handleDownloadNoc = (app: Applicant) => {
+    const currentStatus = (app.application_status ?? app.status ?? "").trim();
+
+    if (currentStatus.toLowerCase() !== "application approved by phe") {
+      alert("NOC is available only after Application Approved by PHE.");
+      return;
+    }
+
+    const nocUrl = `${STATUS_API_URL}/${encodeURIComponent(app.applicationNo)}/noc`;
+    window.open(nocUrl, "_blank");
+  };
 
   async function saveScrutiny() {
     if (!selectedApplication) return;
@@ -413,6 +428,9 @@ export default function DeScrutinyPage() {
                           <button type="button" className="je-action-btn details" onClick={() => openDetails(app)}>Details</button>
                           <button type="button" className="je-action-btn documents" onClick={() => openDocuments(app)}>Documents</button>
                           <button type="button" className="je-action-btn history" onClick={() => openHistory(app)}>History</button>
+                          {activeTab === "status" && (
+                            <button type="button" className="je-action-btn download-noc" onClick={() => handleDownloadNoc(app)}>Download NOC</button>
+                          )}
                         </td>
 
                         <td className="je-center je-bold">{index + 1}</td>
@@ -830,6 +848,10 @@ export default function DeScrutinyPage() {
 
         .je-action-btn.history {
           background: #6b286f;
+        }
+
+        .je-action-btn.download-noc {
+          background: #2e7d32;
         }
 
         .je-center { text-align: center; }

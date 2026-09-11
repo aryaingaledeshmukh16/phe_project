@@ -29,6 +29,7 @@ type Applicant = {
   user_name: string | null;
   scrutiny_status: string | null;
   application_status: string | null;
+  layoutYesNo: string | null;
   entry_date: string | null;
   remark: string | null;
 };
@@ -41,6 +42,7 @@ type HistoryItem = {
   userName: string | null;
   scrutinyStatus: string | null;
   applicationStatus: string | null;
+  layoutYesNo: string | null;
   remark: string | null;
   entryDate: string | null;
 };
@@ -48,8 +50,10 @@ type HistoryItem = {
 type Tab = "document" | "status";
 type Panel = "details" | "documents" | "history" | null;
 
-const API_URL = "http://localhost:5014/api/PHEScrutiny";
-const DOCUMENT_API_URL = "http://localhost:5014/api/JEScrutiny";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5014";
+const API_URL = `${API_BASE_URL}/api/PHEScrutiny`;
+const STATUS_API_URL = `${API_BASE_URL}/api/JEScrutiny`;
+const DOCUMENT_API_URL = `${API_BASE_URL}/api/JEScrutiny`;
 
 const CURRENT_ROLE = "Public Health Engineer";
 const CURRENT_USER_CODE = "003";
@@ -86,6 +90,7 @@ export default function PHEScrutinyPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("document");
   const [scrutinyAction, setScrutinyAction] = useState("Accepted");
+  const [layoutYesNo, setLayoutYesNo] = useState("Select");
   const [remark, setRemark] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -96,14 +101,15 @@ export default function PHEScrutinyPage() {
 
   useEffect(() => {
     fetchApplications();
-  }, []);
+  }, [activeTab]);
 
   async function fetchApplications() {
     try {
       setLoading(true);
       setError("");
 
-      const response = await fetch(API_URL, { cache: "no-store" });
+      const endpoint = activeTab === "status" ? STATUS_API_URL : API_URL;
+      const response = await fetch(endpoint, { cache: "no-store" });
       const text = await response.text();
 
       if (!response.ok) {
@@ -144,11 +150,11 @@ export default function PHEScrutinyPage() {
   function getStatusClass(status: string | null) {
     const value = (status || "Pending").toLowerCase();
 
-    if (value.includes("accept") || value.includes("verified") || value.includes("completed") || value.includes("payment")) {
+    if (value.includes("accept") || value.includes("verified") || value.includes("completed")) {
       return "approved";
     }
 
-    if (value.includes("reject")) {
+    if (value.includes("reject") || value.includes("send back")) {
       return "rejected";
     }
 
@@ -163,13 +169,14 @@ export default function PHEScrutinyPage() {
       });
     }
 
-    return applications.filter((app) => (app.application_status || app.status || "").trim().toLowerCase() === "deputy engineer verification completed");
+    return applications;
   }, [applications, activeTab]);
 
   function openDetails(app: Applicant) {
     setSelectedApplication(app);
     setActivePanel("details");
     setScrutinyAction("Accepted");
+    setLayoutYesNo(app.layoutYesNo || "Select");
     setRemark(app.remark || "");
   }
 
@@ -222,50 +229,28 @@ export default function PHEScrutinyPage() {
     setRemark("");
   }
 
-  function getNocDownloadMessage(
-    applicationStatus: string | null,
-    applicationNo?: string
-  ) {
-    const normalizedStatus =
-      (applicationStatus || "").trim();
+  const handleDownloadNoc = (app: Applicant) => {
+    const currentStatus = (app.application_status ?? app.status ?? "").trim();
 
-    if (
-      normalizedStatus ===
-      "Application Approved by PHE"
-    ) {
-      return `Normal Water NOC download is ready for Application No: ${applicationNo || "N/A"}.`;
+    if (currentStatus.toLowerCase() !== "application approved by phe") {
+      alert("NOC is available only after Application Approved by PHE.");
+      return;
     }
 
-    if (
-      normalizedStatus ===
-      "Payment Successful from Citizen"
-    ) {
-      return `Paid Water NOC download is ready for Application No: ${applicationNo || "N/A"}.`;
-    }
-
-    if (
-      normalizedStatus === "Rejected"
-    ) {
-      return "आपल्या अर्ज नामंजूर केलेला आहे";
-    }
-
-    return "आपला अर्ज मंजुरीच्या प्रक्रियेमधे आहे कृपया Application status वर क्लिक करुन अर्जाची स्थिती पहा";
-  }
-
-  function handleDownloadNoc(app: Applicant) {
-    const message = getNocDownloadMessage(
-      app.application_status || app.status,
-      app.applicationNo
-    );
-
-    alert(message);
-  }
+    const nocUrl = `${STATUS_API_URL}/${encodeURIComponent(app.applicationNo)}/noc`;
+    window.open(nocUrl, "_blank");
+  };
 
   async function saveScrutiny() {
     if (!selectedApplication) return;
 
     if (!scrutinyAction || scrutinyAction === "Select") {
       alert("Please select a valid Scrutiny Status.");
+      return;
+    }
+
+    if (!layoutYesNo || layoutYesNo === "Select") {
+      alert("Please select whether the pipeline exists under approved layout.");
       return;
     }
 
@@ -282,6 +267,7 @@ export default function PHEScrutinyPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: scrutinyAction,
+          layoutYesNo,
           remark: remark.trim(),
           role: CURRENT_ROLE,
           userCode: CURRENT_USER_CODE,
@@ -307,9 +293,18 @@ export default function PHEScrutinyPage() {
         role: CURRENT_ROLE,
         user_code: CURRENT_USER_CODE,
         user_name: currentUserName,
+        layoutYesNo,
         scrutiny_status: scrutinyAction === "Accepted" ? "Accepted" : scrutinyAction === "Rejected" ? "Rejected" : "Pending",
-        application_status: scrutinyAction === "Accepted" ? "Due for Payment from Citizen" : scrutinyAction === "Rejected" ? "Rejected" : "Deputy Engineer Verification Completed",
-        status: scrutinyAction === "Accepted" ? "Due for Payment from Citizen" : scrutinyAction === "Rejected" ? "Rejected" : "Deputy Engineer Verification Completed",
+        application_status: scrutinyAction === "Accepted"
+          ? (layoutYesNo === "अस्तित्वात आहे" ? "Application Approved by PHE" : layoutYesNo === "अस्तित्वात नाही" ? "Due for Payment from Citizen" : "Application Approved by PHE")
+          : scrutinyAction === "Rejected"
+            ? "Rejected"
+            : "Deputy Engineer Verification Completed",
+        status: scrutinyAction === "Accepted"
+          ? (layoutYesNo === "अस्तित्वात आहे" ? "Application Approved by PHE" : layoutYesNo === "अस्तित्वात नाही" ? "Due for Payment from Citizen" : "Application Approved by PHE")
+          : scrutinyAction === "Rejected"
+            ? "Rejected"
+            : "Deputy Engineer Verification Completed",
         remark: remark.trim(),
         entry_date: new Date().toISOString(),
       };
@@ -517,6 +512,15 @@ export default function PHEScrutinyPage() {
                         <option value="Accepted">Accepted</option>
                         <option value="Rejected">Rejected</option>
                         <option value="Pending">Pending</option>
+                      </select>
+                    </div>
+
+                    <div className="scrutiny-field">
+                      <label>मंजूर लेआउट अंतर्गत पाण्याची पाईपलाईन अस्तित्वात आहे का नाही *</label>
+                      <select value={layoutYesNo} onChange={(e) => setLayoutYesNo(e.target.value)}>
+                        <option value="Select">Select</option>
+                        <option value="अस्तित्वात आहे">अस्तित्वात आहे</option>
+                        <option value="अस्तित्वात नाही">अस्तित्वात नाही</option>
                       </select>
                     </div>
 
