@@ -1,5 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PHE.API.Application.Common.Interfaces;
+using PHE.API.Application.Features.PHEScrutiny.Commands;
+using PHE.API.Application.Features.PHEScrutiny.History;
+using PHE.API.Application.Features.PHEScrutiny.Queries;
 using PHE.API.Data;
 using PHE.API.Models;
 
@@ -10,10 +14,23 @@ namespace PHE.API.Controllers
     public class PHEScrutinyController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IGetPHEScrutinyApplicationsHandler _getPHEScrutinyApplicationsHandler;
+        private readonly IGetPHEScrutinyApplicationByApplicationNoHandler _getPHEScrutinyApplicationByApplicationNoHandler;
+        private readonly IGetPHEScrutinyHistoryHandler _getPHEScrutinyHistoryHandler;
+        private readonly ISavePHEScrutinyActionHandler _savePHEScrutinyActionHandler;
 
-        public PHEScrutinyController(ApplicationDbContext context)
+        public PHEScrutinyController(
+            ApplicationDbContext context,
+            IGetPHEScrutinyApplicationsHandler getPHEScrutinyApplicationsHandler,
+            IGetPHEScrutinyApplicationByApplicationNoHandler getPHEScrutinyApplicationByApplicationNoHandler,
+            IGetPHEScrutinyHistoryHandler getPHEScrutinyHistoryHandler,
+            ISavePHEScrutinyActionHandler savePHEScrutinyActionHandler)
         {
             _context = context;
+            _getPHEScrutinyApplicationsHandler = getPHEScrutinyApplicationsHandler;
+            _getPHEScrutinyApplicationByApplicationNoHandler = getPHEScrutinyApplicationByApplicationNoHandler;
+            _getPHEScrutinyHistoryHandler = getPHEScrutinyHistoryHandler;
+            _savePHEScrutinyActionHandler = savePHEScrutinyActionHandler;
         }
 
         [HttpGet]
@@ -21,11 +38,7 @@ namespace PHE.API.Controllers
         {
             try
             {
-                var applications = await _context.Applicants
-                    .AsNoTracking()
-                    .Where(x => x.Application_status == "Deputy Engineer Verification Completed")
-                    .OrderByDescending(x => x.Id)
-                    .ToListAsync();
+                var applications = await _getPHEScrutinyApplicationsHandler.HandleAsync();
 
                 return Ok(applications);
             }
@@ -53,9 +66,7 @@ namespace PHE.API.Controllers
 
             try
             {
-                var application = await _context.Applicants
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.ApplicationNo == applicationNo);
+                var application = await _getPHEScrutinyApplicationByApplicationNoHandler.HandleAsync(applicationNo);
 
                 if (application == null)
                 {
@@ -65,8 +76,6 @@ namespace PHE.API.Controllers
                         applicationNo
                     });
                 }
-
-
 
                 return Ok(application);
             }
@@ -95,24 +104,7 @@ namespace PHE.API.Controllers
 
             try
             {
-                var history = await _context.ApplicantsLogs
-                    .AsNoTracking()
-                    .Where(x => x.ApplicationNo == applicationNo)
-                    .OrderByDescending(x => x.LogId)
-                    .Select(x => new
-                    {
-                        logId = x.LogId,
-                        applicationNo = x.ApplicationNo,
-                        role = x.role,
-                        userCode = x.user_code,
-                        userName = x.user_name,
-                        scrutinyStatus = x.scrutiny_status,
-                        applicationStatus = x.Application_status,
-                        layoutYesNo = x.LayoutYesNo,
-                        remark = x.Remark,
-                        entryDate = x.entry_date
-                    })
-                    .ToListAsync();
+                var history = await _getPHEScrutinyHistoryHandler.HandleAsync(applicationNo);
 
                 return Ok(history);
             }
@@ -176,125 +168,17 @@ namespace PHE.API.Controllers
                 });
             }
 
-            var application = await _context.Applicants
-                .FirstOrDefaultAsync(x => x.ApplicationNo == applicationNo);
-
-            if (application == null)
-            {
-                return NotFound(new
-                {
-                    message = "Application not found.",
-                    applicationNo
-                });
-            }
-
-            if (application.Application_status != "Deputy Engineer Verification Completed")
-            {
-                return BadRequest(new
-                {
-                    message = "Application is not ready for PHE verification.",
-                    currentStatus = application.Application_status
-                });
-            }
-
-            var action = request.Action.Trim();
-            var layoutYesNo = request.LayoutYesNo.Trim();
-            string newScrutinyStatus;
-            string newApplicationStatus;
-
-            if (action.Equals("Accepted", StringComparison.OrdinalIgnoreCase))
-            {
-                newScrutinyStatus = "Accepted";
-
-                if (layoutYesNo == "अस्तित्वात आहे")
-                {
-                    newApplicationStatus = "Application Approved by PHE";
-                }
-                else if (layoutYesNo == "अस्तित्वात नाही")
-                {
-                    newApplicationStatus = "Due for Payment from Citizen";
-                }
-                else
-                {
-                    newApplicationStatus = "Application Approved by PHE";
-                }
-            }
-            else if (action.Equals("Rejected", StringComparison.OrdinalIgnoreCase))
-            {
-                newScrutinyStatus = "Rejected";
-                newApplicationStatus = "Rejected";
-            }
-            else if (action.Equals("Pending", StringComparison.OrdinalIgnoreCase))
-            {
-                newScrutinyStatus = "Pending";
-                newApplicationStatus = "Deputy Engineer Verification Completed";
-            }
-            else
-            {
-                return BadRequest(new
-                {
-                    message = "Invalid scrutiny action."
-                });
-            }
-
-            var entryDate = DateTime.Now;
-
-            application.role = request.Role;
-            application.user_code = request.UserCode;
-            application.user_name = request.UserName;
-            application.scrutiny_status = newScrutinyStatus;
-            application.LayoutYesNo = layoutYesNo;
-            application.Application_status = newApplicationStatus;
-            application.Status = newApplicationStatus;
-            application.entry_date = entryDate;
-            application.Remark = request.Remark;
-
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-
             try
             {
-                await _context.SaveChangesAsync();
-
-                var history = new ApplicantsLog
+                var application = await _savePHEScrutinyActionHandler.HandleAsync(applicationNo, new PHEScrutinyActionCommand
                 {
-                    ApplicantId = application.Id,
-                    ApplicationNo = application.ApplicationNo,
-                    FullName = application.FullName,
-                    MobileNumber = application.MobileNumber,
-                    Email = application.Email,
-                    AadhaarNumber = application.AadhaarNumber,
-                    Address = application.Address,
-                    ApplicationType = application.ApplicationType,
-                    Peth = application.Peth,
-                    Zone = application.Zone,
-                    PropertyNumber = application.PropertyNumber,
-                    LayoutAddress = application.LayoutAddress,
-                    ApprovedLayoutNumber = application.ApprovedLayoutNumber,
-                    ApprovedLayoutDate = application.ApprovedLayoutDate,
-                    CreatedDate = application.CreatedDate,
-                    Status = application.Status,
-                    SatBaraPath = application.SatBaraPath,
-                    ApprovedLayoutMapPath = application.ApprovedLayoutMapPath,
-                    GeoTagPhotoPath = application.GeoTagPhotoPath,
-                    KMLFilePath = application.KMLFilePath,
-                    TaxNocPath = application.TaxNocPath,
-                    Latitude = application.Latitude,
-                    Longitude = application.Longitude,
-                    TotalEstimateAmount = application.TotalEstimateAmount,
-                    ShowAmountAsPerNoOfPlots = application.ShowAmountAsPerNoOfPlots,
-                    role = application.role,
-                    user_code = application.user_code,
-                    user_name = application.user_name,
-                    scrutiny_status = application.scrutiny_status,
-                    Application_status = application.Application_status,
-                    LayoutYesNo = application.LayoutYesNo,
-                    entry_date = application.entry_date,
-                    Remark = application.Remark
-                };
-
-                _context.ApplicantsLogs.Add(history);
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    Action = request.Action,
+                    LayoutYesNo = request.LayoutYesNo,
+                    Remark = request.Remark,
+                    Role = request.Role,
+                    UserCode = request.UserCode,
+                    UserName = request.UserName
+                });
 
                 return Ok(new
                 {
@@ -309,10 +193,38 @@ namespace PHE.API.Controllers
                     remark = application.Remark
                 });
             }
+            catch (KeyNotFoundException)
+            {
+                return NotFound(new
+                {
+                    message = "Application not found.",
+                    applicationNo
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                var currentStatus = _context.Applicants
+                    .AsNoTracking()
+                    .Where(x => x.ApplicationNo == applicationNo)
+                    .Select(x => x.Application_status)
+                    .FirstOrDefault();
+
+                if (ex.Message == "Application is not ready for PHE verification.")
+                {
+                    return BadRequest(new
+                    {
+                        message = "Application is not ready for PHE verification.",
+                        currentStatus = currentStatus
+                    });
+                }
+
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
+            }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
-
                 return StatusCode(500, new
                 {
                     message = "PHE scrutiny update failed.",

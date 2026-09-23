@@ -11,10 +11,20 @@ Thumbs.db
 PHE.API/appsettings.json
 PHE.API/appsettings.*.json
 !PHE.API/appsettings.example.json
+**/*.user
+**/*.suo
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key
+**/secrets.json
+**/*secret*
 
 # Local uploads
 PHE.API/Uploads/*
 !PHE.API/Uploads/.gitkeep
+Shared Uploads/**
+!Shared Uploads/.gitkeep
 
 # Next.js and Node.js
 **/node_modules/
@@ -25,4 +35,11 @@ PHE.API/Uploads/*
 **/.env
 **/.env.*
 !**/.env.example
-**/secrets.json
+**/*.local.json
+**/*.local.config
+
+# Runtime logs and local databases
+**/*.log
+**/*.db
+**/*.sqlite
+**/*.sqlite3

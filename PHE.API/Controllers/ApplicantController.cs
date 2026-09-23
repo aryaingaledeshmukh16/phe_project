@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PHE.API.Application.Common.Interfaces;
+using PHE.API.Application.Features.Applications.Commands;
+using PHE.API.Application.Features.Applications.Queries;
 using PHE.API.Data;
 using PHE.API.DTOs;
 using PHE.API.Models;
@@ -11,10 +14,29 @@ namespace PHE.API.Controllers
     public class ApplicantsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IGetApplicantsHandler _getApplicantsHandler;
+        private readonly IGetApplicantByApplicationNoHandler _getApplicantByApplicationNoHandler;
+        private readonly ICreateApplicantHandler _createApplicantHandler;
+        private readonly IUpdateApplicantLayoutHandler _updateApplicantLayoutHandler;
+        private readonly ISaveApplicantSiteVisitHandler _saveApplicantSiteVisitHandler;
+        private readonly IUploadApplicantDocumentsHandler _uploadApplicantDocumentsHandler;
 
-        public ApplicantsController(ApplicationDbContext context)
+        public ApplicantsController(
+            ApplicationDbContext context,
+            IGetApplicantsHandler getApplicantsHandler,
+            IGetApplicantByApplicationNoHandler getApplicantByApplicationNoHandler,
+            ICreateApplicantHandler createApplicantHandler,
+            IUpdateApplicantLayoutHandler updateApplicantLayoutHandler,
+            ISaveApplicantSiteVisitHandler saveApplicantSiteVisitHandler,
+            IUploadApplicantDocumentsHandler uploadApplicantDocumentsHandler)
         {
             _context = context;
+            _getApplicantsHandler = getApplicantsHandler;
+            _getApplicantByApplicationNoHandler = getApplicantByApplicationNoHandler;
+            _createApplicantHandler = createApplicantHandler;
+            _updateApplicantLayoutHandler = updateApplicantLayoutHandler;
+            _saveApplicantSiteVisitHandler = saveApplicantSiteVisitHandler;
+            _uploadApplicantDocumentsHandler = uploadApplicantDocumentsHandler;
         }
 
         // =========================================================
@@ -25,9 +47,7 @@ namespace PHE.API.Controllers
         {
             try
             {
-                var applications = await _context.Applicants
-                    .OrderByDescending(x => x.Id)
-                    .ToListAsync();
+                var applications = await _getApplicantsHandler.HandleAsync();
 
                 return Ok(applications);
             }
@@ -61,9 +81,7 @@ namespace PHE.API.Controllers
                     });
                 }
 
-                var applicant = await _context.Applicants
-                    .FirstOrDefaultAsync(x =>
-                        x.ApplicationNo == applicationNo);
+                var applicant = await _getApplicantByApplicationNoHandler.HandleAsync(applicationNo);
 
                 if (applicant == null)
                 {
@@ -103,70 +121,13 @@ namespace PHE.API.Controllers
                     });
                 }
 
-                // -------------------------------------------------
-                // Generate Application Number
-                // -------------------------------------------------
-                if (string.IsNullOrWhiteSpace(applicant.ApplicationNo))
-                {
-                    applicant.ApplicationNo =
-                        DateTime.Now.ToString("yyyyMMddHHmmss");
-                }
+                var createdApplicant = await _createApplicantHandler.HandleAsync(applicant);
 
-                // -------------------------------------------------
-                // Initial Workflow Information
-                // -------------------------------------------------
-                applicant.role = "JE";
-                applicant.user_code = null;
-                applicant.user_name = null;
-
-                applicant.scrutiny_status = "Pending";
-                applicant.Application_status = "Pending";
-
-                applicant.entry_date = DateTime.Now;
-
-                // -------------------------------------------------
-                // Created Date
-                // -------------------------------------------------
-                if (applicant.CreatedDate == default)
-                {
-                    applicant.CreatedDate = DateTime.Now;
-                }
-
-                // -------------------------------------------------
-                // Status
-                // -------------------------------------------------
-                if (string.IsNullOrWhiteSpace(applicant.Status))
-                {
-                    applicant.Status = "Pending";
-                }
-
-                // -------------------------------------------------
-                // Save Applicant
-                // -------------------------------------------------
-                _context.Applicants.Add(applicant);
-
-                await _context.SaveChangesAsync();
-
-                // -------------------------------------------------
-                // First History Log
-                // -------------------------------------------------
-                var log = CreateApplicantLog(
-                    applicant,
-                    "Application Created"
-                );
-
-                _context.ApplicantsLogs.Add(log);
-
-                await _context.SaveChangesAsync();
-
-                // -------------------------------------------------
-                // Return Application Number
-                // -------------------------------------------------
                 return Ok(new
                 {
                     message = "Application saved successfully.",
-                    applicationNo = applicant.ApplicationNo,
-                    applicantId = applicant.Id
+                    applicationNo = createdApplicant.ApplicationNo,
+                    applicantId = createdApplicant.Id
                 });
             }
             catch (Exception ex)
@@ -211,64 +172,7 @@ namespace PHE.API.Controllers
 
             try
             {
-                var applicant = await _context.Applicants
-                    .FirstOrDefaultAsync(x =>
-                        x.ApplicationNo == applicationNo);
-
-                if (applicant == null)
-                {
-                    return NotFound(new
-                    {
-                        message = "Application not found.",
-                        applicationNo
-                    });
-                }
-
-                var uploadRoot = Path.Combine(
-                    Directory.GetCurrentDirectory(),
-                    "Uploads");
-
-                var files = new[]
-                {
-                    (File: documents.TaxNoc, Folder: "TaxNOC"),
-                    (File: documents.SatBara, Folder: "SatBara"),
-                    (File: documents.LayoutMap, Folder: "LayoutMap"),
-                    (File: documents.GeoTag, Folder: "Geotag")
-                };
-
-                var savedPaths = new Dictionary<string, string>();
-
-                foreach (var item in files)
-                {
-                    var folder = Path.Combine(uploadRoot, item.Folder);
-                    Directory.CreateDirectory(folder);
-
-                    var fileName =
-                        $"{Guid.NewGuid()}_{Path.GetFileName(item.File.FileName)}";
-                    var fullPath = Path.Combine(folder, fileName);
-
-                    await using var stream = new FileStream(
-                        fullPath,
-                        FileMode.CreateNew);
-                    await item.File.CopyToAsync(stream);
-
-                    savedPaths[item.Folder] =
-                        $"Uploads/{item.Folder}/{fileName}";
-                }
-
-                applicant.TaxNocPath = savedPaths["TaxNOC"];
-                applicant.SatBaraPath = savedPaths["SatBara"];
-                applicant.ApprovedLayoutMapPath = savedPaths["LayoutMap"];
-                applicant.GeoTagPhotoPath = savedPaths["Geotag"];
-
-                await _context.SaveChangesAsync();
-
-                var log = CreateApplicantLog(
-                    applicant,
-                    "Documents uploaded");
-
-                _context.ApplicantsLogs.Add(log);
-                await _context.SaveChangesAsync();
+                var applicant = await _uploadApplicantDocumentsHandler.HandleAsync(applicationNo, documents);
 
                 return Ok(new
                 {
@@ -278,6 +182,14 @@ namespace PHE.API.Controllers
                     satBaraPath = applicant.SatBaraPath,
                     approvedLayoutMapPath = applicant.ApprovedLayoutMapPath,
                     geoTagPhotoPath = applicant.GeoTagPhotoPath
+                });
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound(new
+                {
+                    message = "Application not found.",
+                    applicationNo
                 });
             }
             catch (Exception ex)
@@ -301,9 +213,6 @@ namespace PHE.API.Controllers
         {
             try
             {
-                // -------------------------------------------------
-                // Validate Application Number
-                // -------------------------------------------------
                 if (string.IsNullOrWhiteSpace(applicationNo))
                 {
                     return BadRequest(new
@@ -312,9 +221,6 @@ namespace PHE.API.Controllers
                     });
                 }
 
-                // -------------------------------------------------
-                // Validate Request
-                // -------------------------------------------------
                 if (request == null)
                 {
                     return BadRequest(new
@@ -323,14 +229,27 @@ namespace PHE.API.Controllers
                     });
                 }
 
-                // -------------------------------------------------
-                // Find Applicant
-                // -------------------------------------------------
-                var applicant = await _context.Applicants
-                    .FirstOrDefaultAsync(x =>
-                        x.ApplicationNo == applicationNo);
+                try
+                {
+                    var applicant = await _updateApplicantLayoutHandler.HandleAsync(applicationNo, new LayoutUpdateCommand
+                    {
+                        ApplicationType = request.ApplicationType,
+                        Peth = request.Peth,
+                        Zone = request.Zone,
+                        PropertyNumber = request.PropertyNumber,
+                        LayoutAddress = request.LayoutAddress,
+                        ApprovedLayoutNumber = request.ApprovedLayoutNumber,
+                        ApprovedLayoutDate = request.ApprovedLayoutDate
+                    });
 
-                if (applicant == null)
+                    return Ok(new
+                    {
+                        message = "Layout information saved successfully.",
+                        applicationNo = applicant.ApplicationNo,
+                        applicantId = applicant.Id
+                    });
+                }
+                catch (KeyNotFoundException)
                 {
                     return NotFound(new
                     {
@@ -338,105 +257,15 @@ namespace PHE.API.Controllers
                         applicationNo = applicationNo
                     });
                 }
-
-                // -------------------------------------------------
-                // Update Layout Information
-                // -------------------------------------------------
-                applicant.ApplicationType =
-                    request.ApplicationType?.Trim() ?? "";
-
-                applicant.Peth =
-                    request.Peth?.Trim() ?? "";
-
-                applicant.Zone =
-                    request.Zone?.Trim() ?? "";
-
-                applicant.PropertyNumber =
-                    request.PropertyNumber?.Trim() ?? "";
-
-                applicant.LayoutAddress =
-                    request.LayoutAddress?.Trim() ?? "";
-
-                applicant.ApprovedLayoutNumber =
-                    request.ApprovedLayoutNumber?.Trim() ?? "";
-
-                // -------------------------------------------------
-                // Approved Layout Date
-                // -------------------------------------------------
-                if (!string.IsNullOrWhiteSpace(
-                    request.ApprovedLayoutDate))
+                catch (FormatException ex)
                 {
-                    if (DateTime.TryParse(
-                        request.ApprovedLayoutDate,
-                        out DateTime layoutDate))
+                    return BadRequest(new
                     {
-                        applicant.ApprovedLayoutDate =
-                            layoutDate;
-                    }
-                    else
-                    {
-                        return BadRequest(new
-                        {
-                            message =
-                                "Invalid approved layout date.",
-                            approvedLayoutDate =
-                                request.ApprovedLayoutDate
-                        });
-                    }
+                        message = "Invalid approved layout date.",
+                        approvedLayoutDate = request.ApprovedLayoutDate,
+                        error = ex.Message
+                    });
                 }
-
-                // -------------------------------------------------
-                // Keep Workflow Information
-                // -------------------------------------------------
-                if (string.IsNullOrWhiteSpace(
-                    applicant.Application_status))
-                {
-                    applicant.Application_status = "Pending";
-                }
-
-                if (string.IsNullOrWhiteSpace(
-                    applicant.scrutiny_status))
-                {
-                    applicant.scrutiny_status = "Pending";
-                }
-
-                if (string.IsNullOrWhiteSpace(
-                    applicant.Status))
-                {
-                    applicant.Status = "Pending";
-                }
-
-                applicant.entry_date = DateTime.Now;
-
-                // -------------------------------------------------
-                // Save Applicant
-                // -------------------------------------------------
-                await _context.SaveChangesAsync();
-
-                // -------------------------------------------------
-                // Create History Log
-                // -------------------------------------------------
-                var log = CreateApplicantLog(
-                    applicant,
-                    "Layout information updated"
-                );
-
-                _context.ApplicantsLogs.Add(log);
-
-                await _context.SaveChangesAsync();
-
-                // -------------------------------------------------
-                // Response
-                // -------------------------------------------------
-                return Ok(new
-                {
-                    message =
-                        "Layout information saved successfully.",
-                    applicationNo =
-                        applicant.ApplicationNo,
-                    applicantId =
-                        applicant.Id
-                });
             }
             catch (DbUpdateException ex)
             {
@@ -665,14 +494,26 @@ namespace PHE.API.Controllers
 
             try
             {
-                // -------------------------------------------------
-                // Find Applicant
-                // -------------------------------------------------
-                var applicant = await _context.Applicants
-                    .FirstOrDefaultAsync(x =>
-                        x.ApplicationNo == applicationNo);
+                try
+                {
+                    var applicant = await _saveApplicantSiteVisitHandler.HandleAsync(applicationNo, siteVisit);
 
-                if (applicant == null)
+                    return Ok(new
+                    {
+                        message = "Site Visit saved successfully.",
+                        applicationNo,
+                        layoutYesNo = applicant.LayoutYesNo,
+                        totalPlots = applicant.TotalPlots,
+                        plotsApplicableForThisNoc = applicant.PlotsApplicableForThisNoc,
+                        amountForPlots = applicant.AmountForPlots,
+                        siteVisitEstimateDocumentPath = applicant.SiteVisitEstimateDocumentPath,
+                        siteVisitGeoTagPhotoPath = applicant.SiteVisitGeoTagPhotoPath,
+                        status = applicant.scrutiny_status,
+                        remark = applicant.Remark,
+                        applicationStatus = applicant.Application_status
+                    });
+                }
+                catch (KeyNotFoundException)
                 {
                     return NotFound(new
                     {
@@ -680,170 +521,13 @@ namespace PHE.API.Controllers
                         applicationNo
                     });
                 }
-
-
-
-                var uploadRoot = Path.Combine(
-                    Directory.GetCurrentDirectory(),
-                    "Uploads");
-
-                var savedPaths = new Dictionary<string, string>();
-
-                // -------------------------------------------------
-                // Upload Estimate Document (conditional)
-                // -------------------------------------------------
-                if (siteVisit.SiteVisitEstimateDocument != null)
+                catch (InvalidOperationException ex)
                 {
-                    var estimateFolder = Path.Combine(
-                        uploadRoot,
-                        "SiteVisit");
-
-                    Directory.CreateDirectory(estimateFolder);
-
-                    var estimateFileName =
-                        $"{Guid.NewGuid()}_{Path.GetFileName(siteVisit.SiteVisitEstimateDocument.FileName)}";
-
-                    var estimateFullPath = Path.Combine(
-                        estimateFolder,
-                        estimateFileName);
-
-                    await using var estimateStream = new FileStream(
-                        estimateFullPath,
-                        FileMode.CreateNew);
-
-                    await siteVisit.SiteVisitEstimateDocument
-                        .CopyToAsync(estimateStream);
-
-                    savedPaths["SiteVisitEstimate"] =
-                        $"Uploads/SiteVisit/{estimateFileName}";
+                    return BadRequest(new
+                    {
+                        message = ex.Message
+                    });
                 }
-
-                // -------------------------------------------------
-                // Upload Geo Tag Photo (always required)
-                // -------------------------------------------------
-                var geoTagFolder = Path.Combine(
-                    uploadRoot,
-                    "SiteVisit");
-
-                Directory.CreateDirectory(geoTagFolder);
-
-                var geoTagFileName =
-                    $"{Guid.NewGuid()}_{Path.GetFileName(siteVisit.SiteVisitGeoTagPhoto.FileName)}";
-
-                var geoTagFullPath = Path.Combine(
-                    geoTagFolder,
-                    geoTagFileName);
-
-                await using var geoTagStream = new FileStream(
-                    geoTagFullPath,
-                    FileMode.CreateNew);
-
-                await siteVisit.SiteVisitGeoTagPhoto
-                    .CopyToAsync(geoTagStream);
-
-                savedPaths["SiteVisitGeoTag"] =
-                    $"Uploads/SiteVisit/{geoTagFileName}";
-
-                // -------------------------------------------------
-                // Calculate AmountForPlots
-                // -------------------------------------------------
-                decimal? calculatedAmount = null;
-
-                if (siteVisit.LayoutYesNo == "अस्तित्वात नाही" &&
-                    siteVisit.TotalEstimateAmount.HasValue &&
-                    siteVisit.TotalPlots.HasValue &&
-                    siteVisit.PlotsApplicableForThisNoc.HasValue)
-                {
-                    double estimatePerPlot =
-                        (double)siteVisit.TotalEstimateAmount /
-                        siteVisit.TotalPlots.Value;
-
-                    double estimateForThisNoc =
-                        estimatePerPlot *
-                        siteVisit.PlotsApplicableForThisNoc.Value;
-
-                    double roundedAmount =
-                        Math.Round(estimateForThisNoc, 0);
-
-                    calculatedAmount =
-                        Convert.ToDecimal(roundedAmount);
-                }
-
-                // -------------------------------------------------
-                // Update Applicant
-                // -------------------------------------------------
-                applicant.LayoutYesNo = siteVisit.LayoutYesNo;
-                applicant.TotalPlots = siteVisit.TotalPlots;
-                applicant.PlotsApplicableForThisNoc =
-                    siteVisit.PlotsApplicableForThisNoc;
-                applicant.AmountForPlots = calculatedAmount;
-
-                if (savedPaths.ContainsKey("SiteVisitEstimate"))
-                {
-                    applicant.SiteVisitEstimateDocumentPath =
-                        savedPaths["SiteVisitEstimate"];
-                }
-
-                if (savedPaths.ContainsKey("SiteVisitGeoTag"))
-                {
-                    applicant.SiteVisitGeoTagPhotoPath =
-                        savedPaths["SiteVisitGeoTag"];
-                }
-
-                applicant.Remark = siteVisit.Remark;
-
-                // -------------------------------------------------
-                // Update Workflow Status
-                // -------------------------------------------------
-                applicant.scrutiny_status = siteVisit.Status == "Reject"
-                    ? "Rejected"
-                    : siteVisit.Status;
-
-                if (siteVisit.Status == "Accept")
-                {
-                    applicant.Application_status =
-                        "Development Charge Fixed";
-                }
-                else if (siteVisit.Status == "Reject")
-                {
-                    applicant.Application_status = "Rejected";
-                }
-
-                applicant.entry_date = DateTime.Now;
-
-                await _context.SaveChangesAsync();
-
-                // -------------------------------------------------
-                // Create History Log
-                // -------------------------------------------------
-                var log = CreateApplicantLogForSiteVisit(
-                    applicant,
-                    "Site Visit Updated");
-
-                _context.ApplicantsLogs.Add(log);
-                await _context.SaveChangesAsync();
-
-                // -------------------------------------------------
-                // Return Success Response
-                // -------------------------------------------------
-                return Ok(new
-                {
-                    message = "Site Visit saved successfully.",
-                    applicationNo,
-                    layoutYesNo = applicant.LayoutYesNo,
-                    totalPlots = applicant.TotalPlots,
-                    plotsApplicableForThisNoc =
-                        applicant.PlotsApplicableForThisNoc,
-                    amountForPlots = applicant.AmountForPlots,
-                    siteVisitEstimateDocumentPath =
-                        applicant.SiteVisitEstimateDocumentPath,
-                    siteVisitGeoTagPhotoPath =
-                        applicant.SiteVisitGeoTagPhotoPath,
-                    status = applicant.scrutiny_status,
-                    remark = applicant.Remark,
-                    applicationStatus =
-                        applicant.Application_status
-                });
             }
             catch (Exception ex)
             {

@@ -1,5 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PHE.API.Application.Common.Interfaces;
+using PHE.API.Application.Features.DeScrutiny.Commands;
+using PHE.API.Application.Features.DeScrutiny.History;
+using PHE.API.Application.Features.DeScrutiny.Queries;
 using PHE.API.Data;
 using PHE.API.Models;
 
@@ -11,13 +15,25 @@ namespace PHE.API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _environment;
+        private readonly IGetDeScrutinyApplicationsHandler _getDeScrutinyApplicationsHandler;
+        private readonly IGetDeScrutinyApplicationByApplicationNoHandler _getDeScrutinyApplicationByApplicationNoHandler;
+        private readonly IGetDeScrutinyHistoryHandler _getDeScrutinyHistoryHandler;
+        private readonly ISaveDeScrutinyActionHandler _saveDeScrutinyActionHandler;
 
         public DeScrutinyController(
             ApplicationDbContext context,
-            IWebHostEnvironment environment)
+            IWebHostEnvironment environment,
+            IGetDeScrutinyApplicationsHandler getDeScrutinyApplicationsHandler,
+            IGetDeScrutinyApplicationByApplicationNoHandler getDeScrutinyApplicationByApplicationNoHandler,
+            IGetDeScrutinyHistoryHandler getDeScrutinyHistoryHandler,
+            ISaveDeScrutinyActionHandler saveDeScrutinyActionHandler)
         {
             _context = context;
             _environment = environment;
+            _getDeScrutinyApplicationsHandler = getDeScrutinyApplicationsHandler;
+            _getDeScrutinyApplicationByApplicationNoHandler = getDeScrutinyApplicationByApplicationNoHandler;
+            _getDeScrutinyHistoryHandler = getDeScrutinyHistoryHandler;
+            _saveDeScrutinyActionHandler = saveDeScrutinyActionHandler;
         }
 
         // =========================================================
@@ -29,12 +45,7 @@ namespace PHE.API.Controllers
         {
             try
             {
-                var applications = await _context.Applicants
-                    .AsNoTracking()
-                    .Where(x => 
-                        x.Application_status == "Development Charge Fixed")
-                    .OrderByDescending(x => x.Id)
-                    .ToListAsync();
+                var applications = await _getDeScrutinyApplicationsHandler.HandleAsync();
 
                 return Ok(applications);
             }
@@ -66,11 +77,7 @@ namespace PHE.API.Controllers
 
             try
             {
-                var application = await _context.Applicants
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(
-                        x => x.ApplicationNo == applicationNo
-                    );
+                var application = await _getDeScrutinyApplicationByApplicationNoHandler.HandleAsync(applicationNo);
 
                 if (application == null)
                 {
@@ -111,24 +118,7 @@ namespace PHE.API.Controllers
 
             try
             {
-                var history = await _context.ApplicantsLogs
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.ApplicationNo == applicationNo)
-                    .OrderByDescending(x => x.LogId)
-                    .Select(x => new
-                    {
-                        logId = x.LogId,
-                        applicationNo = x.ApplicationNo,
-                        role = x.role,
-                        userCode = x.user_code,
-                        userName = x.user_name,
-                        scrutinyStatus = x.scrutiny_status,
-                        applicationStatus = x.Application_status,
-                        remark = x.Remark,
-                        entryDate = x.entry_date
-                    })
-                    .ToListAsync();
+                var history = await _getDeScrutinyHistoryHandler.HandleAsync(applicationNo);
 
                 return Ok(history);
             }
@@ -185,164 +175,58 @@ namespace PHE.API.Controllers
 
             try
             {
-                var application = await _context.Applicants
-                    .FirstOrDefaultAsync(
-                        x => x.ApplicationNo == applicationNo
-                    );
-
-                if (application == null)
+                var application = await _saveDeScrutinyActionHandler.HandleAsync(applicationNo, new DeScrutinyActionCommand
                 {
-                    return NotFound(new
-                    {
-                        message = "Application not found.",
-                        applicationNo
-                    });
-                }
+                    Action = request.Action,
+                    Remark = request.Remark,
+                    Role = request.Role,
+                    UserCode = request.UserCode,
+                    UserName = request.UserName
+                });
 
-                // Verify the application is ready for DE verification
-                if (application.Application_status != "Development Charge Fixed")
+                return Ok(new
                 {
+                    message = "DE verification completed successfully.",
+                    applicationNo = application.ApplicationNo,
+                    scrutinyStatus = application.scrutiny_status,
+                    applicationStatus = application.Application_status,
+                    role = application.role,
+                    userCode = application.user_code,
+                    userName = application.user_name,
+                    entryDate = application.entry_date,
+                    remark = application.Remark
+                });
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound(new
+                {
+                    message = "Application not found.",
+                    applicationNo
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                var message = ex.Message;
+                if (message == "Application is not in 'Development Charge Fixed' status.")
+                {
+                    var currentStatus = _context.Applicants
+                        .AsNoTracking()
+                        .Where(x => x.ApplicationNo == applicationNo)
+                        .Select(x => x.Application_status)
+                        .FirstOrDefault();
+
                     return BadRequest(new
                     {
                         message = "Application is not in 'Development Charge Fixed' status.",
-                        currentStatus = application.Application_status
+                        currentStatus = currentStatus
                     });
                 }
 
-                var action = request.Action.Trim();
-                string newScrutinyStatus;
-                string newApplicationStatus;
-
-                if (action.Equals(
-                    "Select",
-                    StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new
                 {
-                    return BadRequest(new
-                    {
-                        message = "Please select a valid scrutiny status."
-                    });
-                }
-                else if (action.Equals(
-                    "Accepted",
-                    StringComparison.OrdinalIgnoreCase))
-                {
-                    newScrutinyStatus = "Accepted";
-                    newApplicationStatus = "Deputy Engineer Verification Completed";
-                }
-                else if (action.Equals(
-                    "Rejected",
-                    StringComparison.OrdinalIgnoreCase))
-                {
-                    newScrutinyStatus = "Rejected";
-                    newApplicationStatus = "Rejected";
-                }
-                else if (action.Equals(
-                    "Send Back to Jr. Engineer",
-                    StringComparison.OrdinalIgnoreCase))
-                {
-                    newScrutinyStatus = "Send Back";
-                    newApplicationStatus = "Send Back to Jr. Engineer";
-                }
-                else if (action.Equals(
-                    "Pending",
-                    StringComparison.OrdinalIgnoreCase))
-                {
-                    newScrutinyStatus = "Pending";
-                    newApplicationStatus = "Development Charge Fixed";
-                }
-                else
-                {
-                    return BadRequest(new
-                    {
-                        message = "Invalid scrutiny action."
-                    });
-                }
-
-                var entryDate = DateTime.Now;
-
-                application.role = request.Role;
-                application.user_code = request.UserCode;
-                application.user_name = request.UserName;
-                application.scrutiny_status = newScrutinyStatus;
-                application.Application_status = newApplicationStatus;
-                application.entry_date = entryDate;
-                application.Remark = request.Remark;
-                application.Status = newApplicationStatus;
-
-                await using var transaction =
-                    await _context.Database
-                        .BeginTransactionAsync();
-
-                try
-                {
-                    // Save main table
-                    await _context.SaveChangesAsync();
-
-                    // Save history
-                    var history = new ApplicantsLog
-                    {
-                        ApplicantId = application.Id,
-                        ApplicationNo = application.ApplicationNo,
-                        FullName = application.FullName,
-                        MobileNumber = application.MobileNumber,
-                        Email = application.Email,
-                        AadhaarNumber = application.AadhaarNumber,
-                        Address = application.Address,
-                        ApplicationType = application.ApplicationType,
-                        Peth = application.Peth,
-                        Zone = application.Zone,
-                        PropertyNumber = application.PropertyNumber,
-                        LayoutAddress = application.LayoutAddress,
-                        ApprovedLayoutNumber = application.ApprovedLayoutNumber,
-                        ApprovedLayoutDate = application.ApprovedLayoutDate,
-                        CreatedDate = application.CreatedDate,
-                        Status = application.Status,
-                        SatBaraPath = application.SatBaraPath,
-                        ApprovedLayoutMapPath = application.ApprovedLayoutMapPath,
-                        GeoTagPhotoPath = application.GeoTagPhotoPath,
-                        KMLFilePath = application.KMLFilePath,
-                        TaxNocPath = application.TaxNocPath,
-                        Latitude = application.Latitude,
-                        Longitude = application.Longitude,
-                        TotalEstimateAmount = application.TotalEstimateAmount,
-                        ShowAmountAsPerNoOfPlots = application.ShowAmountAsPerNoOfPlots,
-                        role = application.role,
-                        user_code = application.user_code,
-                        user_name = application.user_name,
-                        scrutiny_status = application.scrutiny_status,
-                        Application_status = application.Application_status,
-                        entry_date = application.entry_date,
-                        Remark = application.Remark,
-                        LayoutYesNo = application.LayoutYesNo,
-                        TotalPlots = application.TotalPlots,
-                        PlotsApplicableForThisNoc = application.PlotsApplicableForThisNoc,
-                        AmountForPlots = application.AmountForPlots,
-                        SiteVisitEstimateDocumentPath = application.SiteVisitEstimateDocumentPath,
-                        SiteVisitGeoTagPhotoPath = application.SiteVisitGeoTagPhotoPath
-                    };
-
-                    _context.ApplicantsLogs.Add(history);
-                    await _context.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    return Ok(new
-                    {
-                        message = "DE verification completed successfully.",
-                        applicationNo = application.ApplicationNo,
-                        scrutinyStatus = application.scrutiny_status,
-                        applicationStatus = application.Application_status,
-                        role = application.role,
-                        userCode = application.user_code,
-                        userName = application.user_name,
-                        entryDate = application.entry_date,
-                        remark = application.Remark
-                    });
-                }
-                catch (Exception)
-                {
-                    await transaction.RollbackAsync();
-                    throw;
-                }
+                    message = message
+                });
             }
             catch (Exception ex)
             {
